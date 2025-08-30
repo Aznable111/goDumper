@@ -1,6 +1,12 @@
 # goDumper
 A simple script to dump process memory for the Linux os in addition to embedded systems like MikroTik. goDumper provides targeted dumps or full memory dumps.
 
+# Modifications
+
+- Added `-s` that will just dump the stack and heap regions in the process
+- Added test c binary that creates some variables in different memory locations as a test target
+- Cleaned up some of the code and added a quick makefile for cross compilation
+
 # Usage 
 - This simple script has two modes, targeted dump of a specific memory region like the process heap or stack, or full dump where goDumper will attempt to dump out the entire memory space of the process
 ## Full Dump
