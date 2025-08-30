@@ -50,6 +50,28 @@ func getMaps(port string) []string {
 
 }
 
+func getStackHeap(pid string) []string {
+	var target_regions []string
+
+	memFile := fmt.Sprintf("/proc/%s/maps", pid)
+	file, err := os.OpenFile(memFile, os.O_RDONLY, 0644)
+	if err != nil {
+		fmt.Printf("\r[!] Error Opening file: %v\r\n", memFile)
+		os.Exit(1)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Split(line, " ")
+		region := parts[len(parts)-1]
+		if region == "[stack]" || region == "[heap]" {
+			target_regions = append(target_regions, parts[0])
+		}
+	}
+	return target_regions
+}
+
 func getStartStop(memRange string) (int64, int64) {
 	rangeMem := strings.Split(memRange, "-") // - dividing the start and the stop addresses
 	memStart := rangeMem[0]
@@ -59,6 +81,7 @@ func getStartStop(memRange string) (int64, int64) {
 
 	return memStartNum, memEndNum
 }
+
 
 func doDump(memStart int64, memEnd int64, pid int) {
 
@@ -127,6 +150,7 @@ func main() {
 
 	pid := flag.String("p", "", "The pid of the process to memory dump\r\n")
 	singleShotRange := flag.String("r", "", "[Optional] The single memory range to target -> 77535b8d5000-77535b8d7000\r\n")
+	justStackHeap := flag.Bool("s", false, "[Optional] Just dump stack and heap data (ignores -r)")
 	flag.Parse()
 	fmt.Printf("\r[+] goDumper started\r\n")
 
@@ -136,34 +160,39 @@ func main() {
 		os.Exit(1)
 	}
 
+	pidInt, err := strconv.Atoi(*pid) // Why the hell do we do this, pid never needs to be an integer
+	// Other than the fact that we abitrarily make the sprintf in doDump Require an int
+	if err != nil {
+		fmt.Printf("\r[!] Error converting target pid to int: %v\r\n", err)
+		os.Exit(1)
+	}
 	fmt.Printf("\r[+] Target PID: %v\r\n", *pid)
 
 	// full memory dump of the target pid
-	if *pid != "" && *singleShotRange == "" {
+	if *singleShotRange == "" && *justStackHeap == false {
 		// Getting maps
 		targetMaps := getMaps(*pid)
-
-		pidInt, err := strconv.Atoi(*pid)
-		if err != nil {
-			fmt.Printf("\r[!] Error converting target pid to int: %v\r\n", err)
-			os.Exit(1)
-		}
 
 		for _, line := range targetMaps {
 			memStart, memEnd := getStartStop(line)
 			doDump(memStart, memEnd, pidInt)
-
 		}
 		fmt.Printf("\r[+] Successful memory dump for pid: %v\r\n", pidInt)
-	} else if *pid != "" && *singleShotRange != "" {
-		pidInt, err := strconv.Atoi(*pid)
-		if err != nil {
-			fmt.Printf("\r[!] Error converting target pid to int: %v\r\n", err)
-			os.Exit(1)
+	} else if *justStackHeap == true {
+	// Just a dump of the stack and the heap
+		targetMaps := getStackHeap(*pid)
+		for _, line := range targetMaps {
+			memStart, memEnd := getStartStop(line)
+			doDump(memStart, memEnd, pidInt)
 		}
+		fmt.Printf("\r[+] Successful stack/heap dump for pid :%v\r\n", pidInt)
+	} else if *singleShotRange != "" {
+	// Just a dump of user specified memory range
 		memStart, memEnd := getStartStop(*singleShotRange)
 		doDump(memStart, memEnd, pidInt)
 		fmt.Printf("\r[+] Successful memory dump for pid: %v\r\n", pidInt)
 	}
+
+
 
 }
